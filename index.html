@@ -222,8 +222,7 @@
         let dropCounter = 0;
         let dropInterval = 1000;
         let lastTime = 0;
-        let moveInterval = null;
-        let moveDirection = null;
+        let isMoving = false;
         
         // Игровое поле
         const arena = createMatrix(COLS, ROWS);
@@ -255,19 +254,17 @@
         function resizeCanvas() {
             // Рассчитываем размер блока
             const gameContainer = document.querySelector('.game-container');
-            const maxWidth = gameContainer.clientWidth - 150; // минус место для сайдбара
-            const maxHeight = window.innerHeight * 0.6; // 60% высоты экрана
+            const maxWidth = gameContainer.clientWidth - 150;
+            const maxHeight = window.innerHeight * 0.6;
             
             BLOCK_SIZE = Math.min(
                 Math.floor(maxWidth / COLS),
                 Math.floor(maxHeight / ROWS)
             );
             
-            // Устанавливаем размеры основного canvas
+            // Устанавливаем размеры canvas
             canvas.width = COLS * BLOCK_SIZE;
             canvas.height = ROWS * BLOCK_SIZE;
-            
-            // Размеры для превью следующей фигуры
             nextCanvas.width = 4 * BLOCK_SIZE;
             nextCanvas.height = 4 * BLOCK_SIZE;
         }
@@ -283,7 +280,7 @@
         
         // Создание фигуры
         function createPiece(type) {
-            return JSON.parse(JSON.stringify(SHAPES[type])); // Глубокая копия
+            return JSON.parse(JSON.stringify(SHAPES[type]));
         }
         
         // Рисование матрицы
@@ -298,7 +295,6 @@
                             BLOCK_SIZE, BLOCK_SIZE
                         );
                         
-                        // Границы блоков
                         ctx.strokeStyle = '#000';
                         ctx.lineWidth = 1;
                         ctx.strokeRect(
@@ -345,10 +341,8 @@
         
         // Рисование игрового поля
         function draw() {
-            // Очистка canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Рисование игрового поля
             arena.forEach((row, y) => {
                 row.forEach((value, x) => {
                     if (value !== 0) {
@@ -370,7 +364,6 @@
                 });
             });
             
-            // Рисование текущей фигуры
             drawMatrix(player.matrix, player.pos);
         }
         
@@ -387,7 +380,6 @@
             
             drawNext();
             
-            // Проверка на проигрыш
             if (collide()) {
                 gameOver = true;
                 setTimeout(() => {
@@ -431,16 +423,22 @@
         
         // Движение игрока
         function playerMove(dir) {
+            if (isMoving) return;
+            isMoving = true;
+            
             player.pos.x += dir;
             if (collide()) {
                 player.pos.x -= dir;
-                return false;
             }
-            return true;
+            
+            setTimeout(() => isMoving = false, 100);
         }
         
         // Вращение игрока
         function playerRotate() {
+            if (isMoving) return;
+            isMoving = true;
+            
             const matrix = player.matrix;
             const N = matrix.length;
             
@@ -466,13 +464,16 @@
                         [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
                     }
                 }
-                return false;
             }
-            return true;
+            
+            setTimeout(() => isMoving = false, 100);
         }
         
         // Падение фигуры
         function playerDrop() {
+            if (isMoving) return;
+            isMoving = true;
+            
             player.pos.y++;
             if (collide()) {
                 player.pos.y--;
@@ -481,10 +482,15 @@
                 playerReset();
             }
             dropCounter = 0;
+            
+            setTimeout(() => isMoving = false, 100);
         }
         
         // Быстрое падение
         function playerHardDrop() {
+            if (isMoving) return;
+            isMoving = true;
+            
             while (!collide()) {
                 player.pos.y++;
             }
@@ -493,6 +499,8 @@
             arenaSweep();
             playerReset();
             dropCounter = 0;
+            
+            setTimeout(() => isMoving = false, 100);
         }
         
         // Очистка заполненных линий
@@ -505,7 +513,6 @@
                     }
                 }
                 
-                // Удаление заполненной строки
                 const row = arena.splice(y, 1)[0].fill(0);
                 arena.unshift(row);
                 ++y;
@@ -514,12 +521,9 @@
             }
             
             if (lines > 0) {
-                // Увеличение счета
                 score += lines * lines * 100 * level;
                 level = Math.floor(score / 1000) + 1;
                 updateScore();
-                
-                // Ускорение игры с каждым уровнем
                 dropInterval = Math.max(100, 1000 - (level * 50));
             }
         }
@@ -532,76 +536,30 @@
         
         // Настройка управления
         function setupControls() {
-            // Кнопки
             const leftBtn = document.getElementById('left-btn');
             const rightBtn = document.getElementById('right-btn');
             const upBtn = document.getElementById('up-btn');
             const downBtn = document.getElementById('down-btn');
             
             // Обработчики для кнопок
-            const handleButtonPress = (direction) => {
-                if (gameOver) return;
+            const handleAction = (action) => {
+                if (gameOver || isMoving) return;
                 
-                clearInterval(moveInterval);
-                moveDirection = direction;
-                
-                // Первое нажатие - мгновенное действие
-                switch (direction) {
+                switch (action) {
                     case 'left': playerMove(-1); break;
                     case 'right': playerMove(1); break;
                     case 'up': playerRotate(); break;
                     case 'down': playerDrop(); break;
                 }
-                
-                // Повторное действие после задержки
-                moveInterval = setInterval(() => {
-                    switch (direction) {
-                        case 'left': playerMove(-1); break;
-                        case 'right': playerMove(1); break;
-                        case 'down': playerDrop(); break;
-                    }
-                }, 100);
             };
             
-            const handleButtonRelease = () => {
-                clearInterval(moveInterval);
-                moveDirection = null;
-            };
+            // Нажатие кнопок
+            leftBtn.addEventListener('click', () => handleAction('left'));
+            rightBtn.addEventListener('click', () => handleAction('right'));
+            upBtn.addEventListener('click', () => handleAction('up'));
+            downBtn.addEventListener('click', () => handleAction('down'));
             
-            // Нажатие
-            leftBtn.addEventListener('touchstart', () => handleButtonPress('left'), {passive: true});
-            rightBtn.addEventListener('touchstart', () => handleButtonPress('right'), {passive: true});
-            upBtn.addEventListener('touchstart', () => handleButtonPress('up'), {passive: true});
-            downBtn.addEventListener('touchstart', () => handleButtonPress('down'), {passive: true});
-            
-            leftBtn.addEventListener('mousedown', () => handleButtonPress('left'));
-            rightBtn.addEventListener('mousedown', () => handleButtonPress('right'));
-            upBtn.addEventListener('mousedown', () => handleButtonPress('up'));
-            downBtn.addEventListener('mousedown', () => handleButtonPress('down'));
-            
-            // Отпускание
-            leftBtn.addEventListener('touchend', handleButtonRelease, {passive: true});
-            rightBtn.addEventListener('touchend', handleButtonRelease, {passive: true});
-            upBtn.addEventListener('touchend', handleButtonRelease, {passive: true});
-            downBtn.addEventListener('touchend', handleButtonRelease, {passive: true});
-            
-            leftBtn.addEventListener('mouseup', handleButtonRelease);
-            rightBtn.addEventListener('mouseup', handleButtonRelease);
-            upBtn.addEventListener('mouseup', handleButtonRelease);
-            downBtn.addEventListener('mouseup', handleButtonRelease);
-            
-            // Отмена при выходе за пределы кнопки
-            leftBtn.addEventListener('touchcancel', handleButtonRelease, {passive: true});
-            rightBtn.addEventListener('touchcancel', handleButtonRelease, {passive: true});
-            upBtn.addEventListener('touchcancel', handleButtonRelease, {passive: true});
-            downBtn.addEventListener('touchcancel', handleButtonRelease, {passive: true});
-            
-            leftBtn.addEventListener('mouseleave', handleButtonRelease);
-            rightBtn.addEventListener('mouseleave', handleButtonRelease);
-            upBtn.addEventListener('mouseleave', handleButtonRelease);
-            downBtn.addEventListener('mouseleave', handleButtonRelease);
-            
-            // Свайпы для мобильных устройств
+            // Свайпы
             let touchStartX = 0;
             let touchStartY = 0;
             
@@ -611,50 +569,49 @@
             }, {passive: true});
             
             document.addEventListener('touchend', e => {
-                if (!touchStartX) return;
+                if (!touchStartX || isMoving) return;
                 
                 const touchEndX = e.changedTouches[0].clientX;
                 const touchEndY = e.changedTouches[0].clientY;
                 const diffX = touchEndX - touchStartX;
                 const diffY = touchEndY - touchStartY;
                 
-                // Минимальная дистанция свайпа
                 if (Math.max(Math.abs(diffX), Math.abs(diffY)) < 30) return;
                 
                 if (Math.abs(diffX) > Math.abs(diffY)) {
-                    if (diffX > 0) playerMove(1); // Свайп вправо
-                    else playerMove(-1); // Свайп влево
+                    if (diffX > 0) handleAction('right');
+                    else handleAction('left');
                 } else {
-                    if (diffY > 0) playerHardDrop(); // Свайп вниз - быстрое падение
-                    else playerRotate(); // Свайп вверх - вращение
+                    if (diffY > 0) playerHardDrop();
+                    else handleAction('up');
                 }
                 
                 touchStartX = 0;
             }, {passive: true});
             
             // Клавиатура
-            document.addEventListener('keydown', event => {
-                if (gameOver) return;
+            document.addEventListener('keydown', e => {
+                if (gameOver || isMoving) return;
                 
-                switch (event.key) {
-                    case 'ArrowLeft':
-                        event.preventDefault();
-                        playerMove(-1);
+                switch (e.key) {
+                    case 'ArrowLeft': 
+                        e.preventDefault();
+                        handleAction('left');
                         break;
                     case 'ArrowRight':
-                        event.preventDefault();
-                        playerMove(1);
+                        e.preventDefault();
+                        handleAction('right');
                         break;
                     case 'ArrowDown':
-                        event.preventDefault();
-                        playerDrop();
+                        e.preventDefault();
+                        handleAction('down');
                         break;
                     case 'ArrowUp':
-                        event.preventDefault();
-                        playerRotate();
+                        e.preventDefault();
+                        handleAction('up');
                         break;
                     case ' ':
-                        event.preventDefault();
+                        e.preventDefault();
                         playerHardDrop();
                         break;
                 }
@@ -680,22 +637,17 @@
         // Интеграция с Telegram WebApp
         if (window.Telegram && Telegram.WebApp) {
             const tg = Telegram.WebApp;
-            
-            // Развернуть на весь экран
             tg.expand();
             
-            // Адаптация под тему Telegram
             document.body.style.backgroundColor = tg.themeParams.bg_color || '#17212b';
             document.body.style.color = tg.themeParams.text_color || '#ffffff';
             
-            // Стилизация кнопок под тему Telegram
             const buttons = document.querySelectorAll('.control-btn');
-            buttons.forEach(button => {
-                button.style.background = tg.themeParams.button_color || '#2ea6ff';
-                button.style.color = tg.themeParams.button_text_color || '#ffffff';
+            buttons.forEach(btn => {
+                btn.style.background = tg.themeParams.button_color || '#2ea6ff';
+                btn.style.color = tg.themeParams.button_text_color || '#ffffff';
             });
             
-            // Кнопка закрытия
             const closeBtn = document.createElement('div');
             closeBtn.textContent = '✕';
             closeBtn.style.position = 'fixed';
