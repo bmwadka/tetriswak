@@ -2,54 +2,76 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Telegram Tetris</title>
     <style>
-        body {
+        * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: Arial, sans-serif;
+            touch-action: manipulation;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background-color: #111;
             color: white;
-            touch-action: manipulation;
-            overflow: hidden;
             height: 100vh;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
         }
         
         .header {
             padding: 10px;
             text-align: center;
             background-color: #222;
+            position: relative;
         }
         
-        .game-container {
+        .game-area {
             display: flex;
+            flex-direction: column;
             flex: 1;
             padding: 10px;
             gap: 10px;
+            overflow: hidden;
+        }
+        
+        .game-row {
+            display: flex;
+            flex: 1;
+            gap: 10px;
+            min-height: 0;
         }
         
         #tetris {
             background-color: #000;
             border: 2px solid #333;
-            flex-grow: 1;
-            max-width: 100%;
-            max-height: calc(100vh - 150px);
+            flex: 1;
+            max-height: 70vh;
         }
         
         .sidebar {
             display: flex;
             flex-direction: column;
             gap: 15px;
-            min-width: 120px;
+            width: 120px;
         }
         
         .info-panel {
             background-color: #222;
             padding: 10px;
             border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        #next-piece {
+            background-color: #000;
+            border: 1px solid #333;
+            width: 100%;
+            aspect-ratio: 1;
         }
         
         .controls {
@@ -57,16 +79,19 @@
             grid-template-columns: repeat(3, 1fr);
             gap: 5px;
             margin-top: auto;
+            padding: 10px;
         }
         
         .controls button {
             aspect-ratio: 1;
             border: none;
-            border-radius: 5px;
+            border-radius: 10px;
             background-color: #333;
             color: white;
-            font-size: 20px;
+            font-size: 24px;
             cursor: pointer;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
         
         .controls button:active {
@@ -75,6 +100,30 @@
         
         #rotate-btn {
             grid-column: span 3;
+            height: 50px;
+        }
+        
+        @media (max-width: 768px) {
+            .game-row {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                flex-direction: row;
+                align-items: center;
+            }
+            
+            #next-piece {
+                width: 60px;
+                height: 60px;
+            }
+            
+            .controls {
+                width: 100%;
+                max-width: 300px;
+                margin: 0 auto;
+            }
         }
     </style>
 </head>
@@ -83,23 +132,25 @@
         <h1>🎮 Тетрис</h1>
     </div>
     
-    <div class="game-container">
-        <canvas id="tetris"></canvas>
-        
-        <div class="sidebar">
-            <div class="info-panel">
-                <div>Счет: <span id="score">0</span></div>
-                <div>Уровень: <span id="level">1</span></div>
-                <div>Следующая:</div>
-                <canvas id="next-piece" width="100" height="100"></canvas>
-            </div>
+    <div class="game-area">
+        <div class="game-row">
+            <canvas id="tetris"></canvas>
             
-            <div class="controls">
-                <button id="left-btn">←</button>
-                <button id="down-btn">↓</button>
-                <button id="right-btn">→</button>
-                <button id="rotate-btn">↻</button>
+            <div class="sidebar">
+                <div class="info-panel">
+                    <div>Счет: <span id="score">0</span></div>
+                    <div>Уровень: <span id="level">1</span></div>
+                    <div>Следующая:</div>
+                    <canvas id="next-piece"></canvas>
+                </div>
             </div>
+        </div>
+        
+        <div class="controls">
+            <button id="left-btn">←</button>
+            <button id="down-btn">↓</button>
+            <button id="right-btn">→</button>
+            <button id="rotate-btn">ПОВЕРНУТЬ</button>
         </div>
     </div>
 
@@ -110,10 +161,10 @@
         const nextCanvas = document.getElementById('next-piece');
         const nextCtx = nextCanvas.getContext('2d');
         
-        // Размеры игрового поля
+        // Размеры игрового поля (10x20 блоков)
         const COLS = 10;
         const ROWS = 20;
-        const BLOCK_SIZE = 30;
+        let BLOCK_SIZE;
         
         // Цвета блоков
         const COLORS = [
@@ -175,11 +226,26 @@
         
         // Настройка размеров canvas
         function resizeCanvas() {
-            const size = Math.min(window.innerWidth - 150, window.innerHeight - 150);
+            // Рассчитываем размер блока в зависимости от экрана
+            const gameArea = document.querySelector('.game-area');
+            const maxWidth = gameArea.clientWidth - 130; // минус место для сайдбара
+            const maxHeight = window.innerHeight * 0.6; // 60% высоты экрана
+            
+            // Размер блока должен быть целым числом
+            BLOCK_SIZE = Math.min(
+                Math.floor(maxWidth / COLS),
+                Math.floor(maxHeight / ROWS)
+            );
+            
+            // Устанавливаем размеры canvas
             canvas.width = COLS * BLOCK_SIZE;
             canvas.height = ROWS * BLOCK_SIZE;
             canvas.style.width = COLS * BLOCK_SIZE + 'px';
             canvas.style.height = ROWS * BLOCK_SIZE + 'px';
+            
+            // Размеры для превью следующей фигуры
+            nextCanvas.width = 4 * BLOCK_SIZE;
+            nextCanvas.height = 4 * BLOCK_SIZE;
         }
         
         // Создание матрицы
@@ -203,18 +269,18 @@
                     if (value !== 0) {
                         ctx.fillStyle = COLORS[value];
                         ctx.fillRect(
-                            x + offset.x,
-                            y + offset.y,
-                            1, 1
+                            (x + offset.x) * BLOCK_SIZE,
+                            (y + offset.y) * BLOCK_SIZE,
+                            BLOCK_SIZE, BLOCK_SIZE
                         );
                         
                         // Границы блоков
                         ctx.strokeStyle = '#000';
-                        ctx.lineWidth = 0.05;
+                        ctx.lineWidth = 1;
                         ctx.strokeRect(
-                            x + offset.x,
-                            y + offset.y,
-                            1, 1
+                            (x + offset.x) * BLOCK_SIZE,
+                            (y + offset.y) * BLOCK_SIZE,
+                            BLOCK_SIZE, BLOCK_SIZE
                         );
                     }
                 });
@@ -227,8 +293,8 @@
             
             const matrix = player.next;
             const offset = {
-                x: (nextCanvas.width / BLOCK_SIZE - matrix[0].length) / 2,
-                y: (nextCanvas.height / BLOCK_SIZE - matrix.length) / 2
+                x: (4 - matrix[0].length) / 2,
+                y: (4 - matrix.length) / 2
             };
             
             matrix.forEach((row, y) => {
@@ -259,7 +325,26 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             // Рисование игрового поля
-            drawMatrix(arena, {x: 0, y: 0});
+            arena.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        ctx.fillStyle = COLORS[value];
+                        ctx.fillRect(
+                            x * BLOCK_SIZE,
+                            y * BLOCK_SIZE,
+                            BLOCK_SIZE, BLOCK_SIZE
+                        );
+                        
+                        ctx.strokeStyle = '#000';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(
+                            x * BLOCK_SIZE,
+                            y * BLOCK_SIZE,
+                            BLOCK_SIZE, BLOCK_SIZE
+                        );
+                    }
+                });
+            });
             
             // Рисование текущей фигуры
             drawMatrix(player.matrix, player.pos);
@@ -274,7 +359,7 @@
             player.matrix = player.next;
             player.next = createPiece(Math.floor(Math.random() * 7) + 1);
             player.pos.y = 0;
-            player.pos.x = (arena[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
+            player.pos.x = Math.floor((arena[0].length - player.matrix[0].length) / 2);
             
             drawNext();
             
@@ -286,6 +371,8 @@
                 score = 0;
                 level = 1;
                 updateScore();
+                playerReset();
+                gameOver = false;
             }
         }
         
@@ -295,8 +382,9 @@
             for (let y = 0; y < m.length; ++y) {
                 for (let x = 0; x < m[y].length; ++x) {
                     if (m[y][x] !== 0 &&
-                        (arena[y + o.y] &&
-                        arena[y + o.y][x + o.x]) !== 0) {
+                        (arena[y + o.y] === undefined ||
+                        arena[y + o.y][x + o.x] === undefined ||
+                        arena[y + o.y][x + o.x] !== 0)) {
                         return true;
                     }
                 }
@@ -388,6 +476,9 @@
                 score += lines * lines * 100 * level;
                 level = Math.floor(score / 1000) + 1;
                 updateScore();
+                
+                // Ускорение игры с каждым уровнем
+                dropInterval = Math.max(100, 1000 - (level * 50));
             }
         }
         
@@ -399,10 +490,39 @@
         
         // Настройка управления
         function setupControls() {
+            // Кнопки
             document.getElementById('left-btn').addEventListener('click', () => playerMove(-1));
             document.getElementById('right-btn').addEventListener('click', () => playerMove(1));
             document.getElementById('down-btn').addEventListener('click', () => playerDrop());
             document.getElementById('rotate-btn').addEventListener('click', () => playerRotate());
+            
+            // Свайпы для мобильных устройств
+            let touchStartX = 0;
+            let touchStartY = 0;
+            
+            document.addEventListener('touchstart', e => {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }, {passive: true});
+            
+            document.addEventListener('touchend', e => {
+                if (!touchStartX) return;
+                
+                const touchEndX = e.changedTouches[0].clientX;
+                const touchEndY = e.changedTouches[0].clientY;
+                const diffX = touchEndX - touchStartX;
+                const diffY = touchEndY - touchStartY;
+                
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    if (diffX > 0) playerMove(1); // Свайп вправо
+                    else playerMove(-1); // Свайп влево
+                } else {
+                    if (diffY > 0) playerDrop(); // Свайп вниз
+                    else playerRotate(); // Свайп вверх
+                }
+                
+                touchStartX = 0;
+            }, {passive: true});
             
             // Клавиатура
             document.addEventListener('keydown', event => {
@@ -448,21 +568,31 @@
             // Развернуть на весь экран
             tg.expand();
             
-            // Изменение темы под Telegram
+            // Адаптация под тему Telegram
             document.body.style.backgroundColor = tg.themeParams.bg_color || '#17212b';
             document.body.style.color = tg.themeParams.text_color || '#ffffff';
             
-            // Можно добавить кнопку закрытия
+            // Стилизация кнопок под тему Telegram
+            const buttons = document.querySelectorAll('.controls button');
+            buttons.forEach(button => {
+                button.style.background = tg.themeParams.button_color || '#2ea6ff';
+                button.style.color = tg.themeParams.button_text_color || '#ffffff';
+            });
+            
+            // Кнопка закрытия
             const closeBtn = document.createElement('button');
-            closeBtn.textContent = 'Закрыть';
+            closeBtn.textContent = '✕';
             closeBtn.style.position = 'fixed';
-            closeBtn.style.top = '10px';
-            closeBtn.style.right = '10px';
-            closeBtn.style.padding = '5px 10px';
+            closeBtn.style.top = '15px';
+            closeBtn.style.right = '15px';
+            closeBtn.style.width = '30px';
+            closeBtn.style.height = '30px';
             closeBtn.style.background = tg.themeParams.button_color || '#2ea6ff';
             closeBtn.style.color = tg.themeParams.button_text_color || '#ffffff';
             closeBtn.style.border = 'none';
-            closeBtn.style.borderRadius = '5px';
+            closeBtn.style.borderRadius = '50%';
+            closeBtn.style.fontSize = '16px';
+            closeBtn.style.zIndex = '1000';
             closeBtn.onclick = () => tg.close();
             document.body.appendChild(closeBtn);
         }
