@@ -2,7 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackContext
 
 TOKEN = "7566789045:AAGGcOBNFtFuyLfa6ndvO0lmlZ5hwzTi5GM"
-WEB_APP_URL = "https://github.com/bmwadka/tetriswak"
+WEB_APP_URL = "https://bmwadka.github.io/tetriswak/"
 
 def start(update: Update, context: CallbackContext):
     button = InlineKeyboardButton(
